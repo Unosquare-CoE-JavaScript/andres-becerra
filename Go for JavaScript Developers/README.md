@@ -904,6 +904,101 @@
 
 
 # Pointers
+- A pointer variable in Go is a variable that holds the _memory location_ of that variable, instead of a copy of its value.
+
+```go
+  var name string
+  var namePointer *string // - pointer
+
+  fmt.Println(name)         // ""
+  fmt.Println(namePointer) // <nil>
+```
+- A normal string variable (`name`) is assigned a value of `""`.
+- A pointer string variable (`namePointer`), however, is assigned it's default value of `<nil>` in anticipation of a future memory location.
+- To assign a variable it's address in memory, you use the `&` symbol (think "a - at - for address").
+
+```go
+  var name string
+  var namePointer *string // - pointer
+
+  fmt.Println(name)         // ""
+  fmt.Println(namePointer)  // <nil> 
+  fmt.Println(&name)        // 0xc000014250 - memory address
+  ///////////////
+  var name string = "Andres"
+  var namePointer *string = &name
+  var nameValue = *namePointer
+
+  fmt.Println(name)         // Andres
+  fmt.Println(namePointer)  // 0xc000014250 - memory address
+  fmt.Println(nameValue)    // Andres
+```
+- So now we're looking at the _memory address_ of a variable, rather than the value that is stored there. 
+- To get that value, we need to dig into that address and pull the value out. 
+- To `read through` a pointer variable to get the actual value, you use `pointer indirection` to "deference" that variable back to its original value.
+
+> - Pointer types are indicated with a `*` next to the _TYPE NAME_, indicates that variable will POINT TO a memory location.
+> - Pointer variable values are visible with a `*` next to the _VARIABLE NAME_.
+> - To read through a variable to see the pointer address, use a `&` next to the _VARIABLE NAME_.
+> - ie: `var nameValue = *namePointer` => "Andres"
+
+- **Pass By Value**
+  - Function parameters represent a COPY of the value that they reference. 
+  - This means that any change made to that variable within the function is modifying the copy, not the underlying value in memory. 
+
+```go
+package main
+
+import "fmt"
+import "strings"
+
+func changeName(n string) {
+    n = strings.ToUpper(n)
+}
+
+func main() {
+    name := "Andres"
+    changeName(name)
+    fmt.Println(name) // Andres - didn't Capitalize
+}
+
+///////////////
+// If we did want the `changeName` function to modify the name variable, we need to pass a pointer.
+
+func changeName(n *string) {
+	*n = strings.ToUpper(*n)
+}
+
+func main() {
+	name := "Andres"
+	changeName(&name)
+	fmt.Println(name) // ANDRES
+}
+
+```
+
+- **Pointers And Structs**
+  - Let's take the following struct:
+
+```go
+package main
+
+import "fmt"
+
+
+type Coordinates struct {
+  X, Y float64
+}
+
+var c = Coordinates{X: 120.5, Y: 300}
+
+func main() {
+  // To access a field on a struct pointer
+  pointerCoords := &c   // - pointer
+  (*pointerCoords).X =  200
+  fmt.Println(c) // {200, 300}
+}
+```
 
 
 [Back](#content)
@@ -912,6 +1007,109 @@
 
 
 # Error Handling
+- ERROR:
+  - Indicates that something bad happened, but it might be possible to continue running the program.
+  - For example: A function that intentionally returns an error if somenthing goes wrong.
+- PANIC:
+  - Panic is a built-in function that stops the ordinary flow of control and begins panicking.
+  - Happen at run time.
+  - Something happened that was fatal to your program and program stop excution.
+  - For example: Trying to open a file that don't exist.
+- RECOVER:
+  - Recover is a built-in function that regains control of a panicking goroutine. 
+  - Recover is only useful inside deferred functions. 
+  - During normal execution, a call to recover will return `nil` and have no other effect. 
+  - If the current goroutine is panicking, a call to recover will capture the value given to panic and resume normal execution.
+
+- **Error Type**
+  - The first type of error is the built in `error` type. 
+  - When this occurs, most of the time you will have a game plan for what to do instead and your program can continue to run.
+  - The built in `error` type is an `interface` type, with a method called `Error()` that returns the string of the error message itself.
+  - That interface looks like this:
+
+    ```go
+    type error interface {
+        Error() string
+    }
+    ////////////
+    package main
+
+    import (
+        "log" // -
+        "errors" // -
+        "fmt"
+    )
+
+    func isGreaterThanTen(num int) error {
+        if num < 10 {
+            return errors.New("something bad happened")
+        }
+        return nil
+    }
+    ////////////
+    func isGreaterThanTen(num int) error {
+    if num < 10 {
+        return fmt.Errorf("%v is NOT GREATER THAN TEN", num)
+    }
+    return nil
+    }
+
+    func main() {
+    err := isGreaterThanTen(9)
+    if err != nil {
+        // Logs can be providing code tracing, profiling, and analytics.
+        log.Println(err) // - log.Println
+    } else {
+        fmt.Println("Carry On.")
+    }
+    }
+    ```
+    - the `fmt` package will return an error.
+  
+    > IMPORTANT: `nil` is an acceptable return value for an `error` type as well.
+
+    > NOTE: Log: This is a simple logging package built in to Go. You can format the output similarly to `fmt` which prints it to the console. Log will print the date and time of each logged message. Again, check out `go doc log` for more details.
+
+
+- **Exiting The Program**
+  - If your program encounters an error that should halt execution, you can use `log.Fatal` from the `log` package which will log the error, and then exit the program.
+
+```go
+func main() {
+  err := isGreaterThanTen(9)
+  if err != nil {
+    log.Fatalln(err) // - log.Fatal
+  } else {
+    fmt.Println("Carry On.")
+  }
+}
+```
+
+
+- **Deferred Functions Calls**
+  - A defer statement is often used with paired operations like open and close, connect and disconnect, or lock and unlock to ensure that resources are released in all cases, no matter how complex the control flow. 
+  - The right place for a defer statement that releases a resource is immediately after the resource has been successfully acquired.
+  - Deferred Functions are run even if a runtime **panic** occurs.
+  - Deferred functions are executed in LIFO order, so the above code prints: 4 3 2 1 0.
+    ```go
+    package main
+        import "fmt"
+        func main() {
+            for i := 0; i < 5; i++ {
+                defer fmt.Printf("%d ", i) // 4 3 2 1 0
+            }
+        }
+    ```
+
+- `defer`: executes a line of code last within a function.
+- `panic`: called during a run time error, halts execution of the program.
+- `recover`: tells go what to do after a panic.
+
+[Back](#content)
+
+***
+
+
 
 
 [Back](#content)
@@ -920,7 +1118,29 @@
 
 
 # Methods
+- A method is a special kind of function that acts on variable of a certain type, called the receiver, which is an extra parameter placed before the method's name, used to specify the moderator type to which the method is attached. 
+- The receiver type can be anything, not only a struct type: any type can have methods, even a function type or alias types for int, bool, string or array.
+  ```go
+    package main
+    import "fmt"
 
+    type multiply int // -
+
+    func (m multiply) tentimes() int { // method
+        return int(m * 10)
+    }
+
+    func main() {
+        var num int = 2
+        mul:= multiply(num)
+        fmt.Println("Ten times of number is: ",mul.tentimes()) // Ten times of number is:  20
+    }
+
+  ```
+- **Advantages**
+    - Encapsulation
+    - Polymorphism - two different types can have a method of the same name 
+    - Functions that control/modify state
 
 [Back](#content)
 
@@ -928,6 +1148,93 @@
 
 
 # Interfaces
+- An Interface is an abstract type.
+- Interface describes all the methods of a method set and provides the signatures for each method.
+- An interface contains a list of function signatures, describing the behavior of other types.
+- To create interface use **interface** keyword, followed by curly braces containing a list of method names, along with any parameters or return values the methods are expected to have.
+  ```go
+  // Declare an Interface Type and methods does not have a body
+    type Employee interface {
+        PrintName() string                // Method with string return type
+        PrintAddress(id int)              // Method with int parameter
+        PrintSalary(b int, t int) float64 // Method with parameters and return type
+    }
+  ```
+
+
+You can also use the empty interface type to indicate that Go should accept
+anything.
+
+```go
+interface{}
+```
+
+```go
+func DoSomething(v interface{}) {
+  // This function will take anything as a parameter.
+}
+```
+
+- Example Using Interface:
+
+```go
+package main
+
+import "fmt"
+
+// Describer prints out a entity description
+type Describer interface {
+	describe() string
+}
+
+// User is a single user type
+type User struct {
+	ID                         int
+	FirstName, LastName, Email string
+}
+
+// Group is a group of Users
+type Group struct {
+	role           string
+	users          []User
+	newestUser     User
+	spaceAvailable bool
+}
+
+func (u *User) describe() string {
+	desc := fmt.Sprintf("Name: %s %s, Email: %s, ID: %d", u.FirstName, u.LastName, u.Email, u.ID)
+	return desc
+}
+
+func (g *Group) describe() string {
+	desc := fmt.Sprintf("The %s user group has %d users. Newest user:  %s, Accepting New Users:  %t", g.role, len(g.users), g.newestUser.FirstName, g.spaceAvailable)
+	return desc
+}
+
+// DoTheDescribing can be implemented on any type that has a describe method 
+func DoTheDescribing(d Describer) string {
+	return d.describe()
+}
+
+func main() {
+	u1 := User{ID: 1, FirstName: "user", LastName: "test", Email: "user.test@gmail.com"}
+	u2 := User{ID: 1, FirstName: "user2", LastName: "test2", Email: "user2.test2@gmail.com"}
+	g := Group{role: "admin", users: []User{u1, u2}, newestUser: u2, spaceAvailable: true}
+
+	describeUser := u1.describe()
+	describeGroup := g.describe()
+
+	userDescribeWithIface := DoTheDescribing(&u1)
+	groupDescribeWithIface := DoTheDescribing(&g)
+
+	fmt.Println(describeUser)
+	fmt.Println(describeGroup)
+
+	fmt.Println(userDescribeWithIface)
+	fmt.Println(groupDescribeWithIface)
+}
+```
+
 
 
 [Back](#content)
@@ -936,7 +1243,125 @@
 
 
 # Web Servers
+- To work with HTTP we need to import the HTTP package. It contains client and server implementation for HTTP.
+- To create a basic HTTP server, we need to create an endpoint. 
+- In Go, we need to use _handler functions_ that will handle different routes when accessed. 
+- Here is a simple server that listens to port 5050.
+  ```go
+  package main
+ 
+    import (
+        "fmt"
+        "net/http"
+    )
+    
+    func main() {
+            // handle route using handler function
+        http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+            fmt.Fprintf(w, "Welcome to new server!")
+        })
+    
+            // listen to port
+        http.ListenAndServe(":5050", nil)
+    }
+  ```
+- We can handle different routes just like before. 
+- We can simply use different handlers for each route we want to handle. Here are some examples.
+  ```go
+  package main
+ 
+    import (
+        "fmt"
+        "net/http"
+    )
+    
+    func main() {
+        http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+            fmt.Fprintf(w, "Welcome to new server!")
+        })
+    
+        http.HandleFunc("/students", func(w http.ResponseWriter, r *http.Request) {
+            fmt.Fprintf(w, "Welcome Students!")
+        })
+    
+        http.HandleFunc("/teachers", func(w http.ResponseWriter, r *http.Request) {
+            fmt.Fprintf(w, "Welcome teachers!")
+        })
+    
+        http.ListenAndServe(":5050", nil)
+    }
+  ```
+  
+- **Using a server mux**
+  - A mux is a multiplexer. 
+  - Go has a type servemux defined in http package which is a request multiplexer. 
+  - Here’s how we can use it for different paths. 
+  - Here we are using the io package to send results.
+  ```go
+  package main
+ 
+    import (
+        "io"
+        "net/http"
+    )
+    
+    func welcome(w http.ResponseWriter, r *http.Request) {
+        io.WriteString(w, "Welcome!")
+    }
+    
+    func main() {
+    
+        mux := http.NewServeMux() // multiplexer
+    
+        mux.HandleFunc("/welcome", welcome)
+    
+        http.ListenAndServe(":5050", mux)
+    }
+  ```
 
+- **Structs & JSON**
+    - we are used to working with JSON objecst when we make HTTP requests. 
+    - When working with a struct in Go, we can tell our program what we want our JSON too look like, and then encode/decode it (read: stringify/parse) back and forth into Go.
+    - In order to turn this struct into a JSON object, we can use the `enconding/json` package that ships with Go.
+
+```go
+package main
+
+import "fmt"
+import "encoding/json"
+
+
+type User struct {
+  ID int
+  FirstName string
+  LastName string
+  Email string
+}
+
+func main() {
+  u := User{
+    ID: 1,
+    FirstName: "user",
+    LastName: "test",
+    Email: "user.test@gmail.com",
+  }
+
+  data, _ := json.Marshal(u)
+  fmt.Println(string(data)) // {"ID":1,"FirstName":"user","LastName":"test","Email":"user.test@gmail.com"}
+}
+```
+
+> When you print this out, the structure is ALMOST there, but the formatting isn't conventional JSON.
+
+- To modify what we want those keys to look like , we can add an additional field to our struct called a `field tag`.
+```go
+type User struct {
+  ID int `json:"id"`
+  FirstName string `json:"firstName"`
+  LastName string `json:"lastName"`
+  Email string `json:"emailAddress"`
+}
+```
 
 [Back](#content)
 
